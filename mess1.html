@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Messaging App</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 600px;
+            height: 80vh;
+            max-height: 900px;
+            overflow: hidden;
+        }
+        .messages {
+            flex-grow: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background-color: #f9fafb;
+        }
+        .message-bubble {
+            padding: 0.75rem 1rem;
+            border-radius: 1.25rem;
+            max-width: 75%;
+            word-wrap: break-word;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            line-height: 1.4;
+        }
+        .message-bubble.sent {
+            align-self: flex-end;
+            background-color: #3b82f6;
+            color: white;
+            border-top-right-radius: 0.25rem;
+        }
+        .message-bubble.received {
+            align-self: flex-start;
+            background-color: #e5e7eb;
+            color: #374151;
+            border-top-left-radius: 0.25rem;
+        }
+        .message-footer {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+        .message-bubble.sent .message-footer {
+            color: #d1d5db;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            max-width: 400px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chat-container">
+        <!-- Header -->
+        <header class="bg-indigo-600 text-white p-6 rounded-t-3xl shadow-lg">
+            <h1 class="text-3xl font-bold text-center">School Chat</h1>
+            <p id="user-id-display" class="text-sm text-center mt-2 opacity-80"></p>
+        </header>
+
+        <!-- Message Area -->
+        <div id="messages" class="messages">
+            <!-- Messages will be dynamically added here -->
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
+            <input type="text" id="message-input" placeholder="Type your message..."
+                   class="flex-grow p-3 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+            <button id="send-button"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-full transition-all duration-200 shadow-md transform active:scale-95">
+                Send
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Modal for Alerts/Confirms -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <p id="modal-message" class="text-lg text-gray-700 mb-4"></p>
+            <div class="flex justify-center gap-4">
+                <button id="modal-ok" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">OK</button>
+                <button id="modal-cancel" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hidden">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Custom Alert/Confirm Modal Functions ---
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalMessage = document.getElementById('modal-message');
+        const modalOk = document.getElementById('modal-ok');
+        const modalCancel = document.getElementById('modal-cancel');
+        let resolveModalPromise;
+
+        function showModal(message, isConfirm = false) {
+            return new Promise(resolve => {
+                modalMessage.textContent = message;
+                modalCancel.classList.toggle('hidden', !isConfirm);
+                modalOverlay.classList.add('show');
+                resolveModalPromise = resolve;
+            });
+        }
+
+        modalOk.onclick = () => {
+            modalOverlay.classList.remove('show');
+            if (resolveModalPromise) resolveModalPromise(true);
+        };
+        modalCancel.onclick = () => {
+            modalOverlay.classList.remove('show');
+            if (resolveModalPromise) resolveModalPromise(false);
+        };
+
+        // --- Chat Application Logic ---
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const userIdDisplay = document.getElementById('user-id-display');
+
+        // Use sessionStorage to keep a unique user ID for this browser session
+        let userId = sessionStorage.getItem('chatUserId');
+        if (!userId) {
+            // Generate a user ID with a maximum of 8 characters
+            userId = Math.random().toString(36).substring(2, 10);
+            sessionStorage.setItem('chatUserId', userId);
+        }
+        userIdDisplay.textContent = `Your User ID: ${userId}`;
+
+        // Create a BroadcastChannel to communicate between tabs
+        const channel = new BroadcastChannel('school-chat-channel');
+
+        // Function to render a new message to the UI
+        function renderMessage(msg, isSent) {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
+            
+            const messageText = document.createElement('p');
+            messageText.textContent = msg.content;
+            
+            const messageFooter = document.createElement('div');
+            messageFooter.className = 'message-footer';
+            const senderDisplay = msg.senderId.slice(0, 8);
+            const timestampDisplay = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            messageFooter.textContent = `${isSent ? 'You' : senderDisplay}... - ${timestampDisplay}`;
+
+            messageElement.appendChild(messageText);
+            messageElement.appendChild(messageFooter);
+            messagesDiv.appendChild(messageElement);
+
+            // Auto-scroll to the bottom
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Add event listener for the Send button
+        sendButton.addEventListener('click', () => {
+            const messageText = messageInput.value.trim();
+            if (messageText) {
+                const messageData = {
+                    content: messageText,
+                    senderId: userId,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Send the message to all other tabs via the BroadcastChannel
+                channel.postMessage(messageData);
+
+                // Render the message in the current tab as well
+                renderMessage(messageData, true);
+                
+                messageInput.value = ''; // Clear the input field
+            }
+        });
+
+        // Listen for messages from other tabs
+        channel.onmessage = (event) => {
+            const messageData = event.data;
+            // Only render messages from others
+            if (messageData.senderId !== userId) {
+                renderMessage(messageData, false);
+            }
+        };
+
+        // Allow sending with the Enter key
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendButton.click();
+            }
+        });
+
+    </script>
+</body>
+</html>
