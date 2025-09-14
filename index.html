@@ -112,13 +112,17 @@
         </div>
 
         <!-- Input Area -->
-        <div class="p-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
-            <input type="text" id="message-input" placeholder="Type your message..."
-                   class="flex-grow p-3 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
-            <button id="send-button"
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-full transition-all duration-200 shadow-md transform active:scale-95">
-                Send
-            </button>
+        <div class="p-4 bg-gray-50 flex flex-col gap-2 border-t border-gray-200">
+            <input type="text" id="recipient-id-input" placeholder="Recipient's User ID (or leave blank for public)"
+                   class="w-full p-3 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 text-sm">
+            <div class="flex items-center gap-2">
+                <input type="text" id="message-input" placeholder="Type your message..."
+                    class="flex-grow p-3 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+                <button id="send-button"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-full transition-all duration-200 shadow-md transform active:scale-95">
+                    Send
+                </button>
+            </div>
         </div>
     </div>
 
@@ -161,6 +165,7 @@
 
         // --- Chat Application Logic ---
         const messagesDiv = document.getElementById('messages');
+        const recipientInput = document.getElementById('recipient-id-input');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const userIdDisplay = document.getElementById('user-id-display');
@@ -178,7 +183,10 @@
         const channel = new BroadcastChannel('school-chat-channel');
 
         // Function to render a new message to the UI
-        function renderMessage(msg, isSent) {
+        function renderMessage(msg) {
+            const isSent = msg.senderId === userId;
+            const isPrivate = !!msg.recipientId;
+
             const messageElement = document.createElement('div');
             messageElement.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
             
@@ -187,10 +195,16 @@
             
             const messageFooter = document.createElement('div');
             messageFooter.className = 'message-footer';
-            const senderDisplay = msg.senderId.slice(0, 8);
+            const senderDisplay = msg.senderId;
+            const recipientDisplay = msg.recipientId;
             const timestampDisplay = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            messageFooter.textContent = `${isSent ? 'You' : senderDisplay}... - ${timestampDisplay}`;
-
+            
+            if (isPrivate) {
+                messageFooter.textContent = `DM from ${senderDisplay} to ${recipientDisplay} - ${timestampDisplay}`;
+            } else {
+                messageFooter.textContent = `${senderDisplay}... - ${timestampDisplay}`;
+            }
+            
             messageElement.appendChild(messageText);
             messageElement.appendChild(messageFooter);
             messagesDiv.appendChild(messageElement);
@@ -202,10 +216,13 @@
         // Add event listener for the Send button
         sendButton.addEventListener('click', () => {
             const messageText = messageInput.value.trim();
+            const recipientId = recipientInput.value.trim();
+
             if (messageText) {
                 const messageData = {
                     content: messageText,
                     senderId: userId,
+                    recipientId: recipientId || null,
                     timestamp: new Date().toISOString()
                 };
 
@@ -213,7 +230,7 @@
                 channel.postMessage(messageData);
 
                 // Render the message in the current tab as well
-                renderMessage(messageData, true);
+                renderMessage(messageData);
                 
                 messageInput.value = ''; // Clear the input field
             }
@@ -222,9 +239,11 @@
         // Listen for messages from other tabs
         channel.onmessage = (event) => {
             const messageData = event.data;
-            // Only render messages from others
-            if (messageData.senderId !== userId) {
-                renderMessage(messageData, false);
+            const isPrivate = !!messageData.recipientId;
+            
+            // Only render public messages or private messages addressed to me
+            if (!isPrivate || messageData.recipientId === userId || messageData.senderId === userId) {
+                renderMessage(messageData);
             }
         };
 
